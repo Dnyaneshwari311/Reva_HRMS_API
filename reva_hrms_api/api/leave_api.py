@@ -8,222 +8,359 @@ def get_leave_types():
     try:
         leave_types = frappe.get_all(
             "Leave Type",
-            fields=["name", "max_leaves_allowed", "is_lwp", "include_holidays", "carry_forward"]
+            fields=[
+                "name",
+                "leave_type_name",
+                "max_leaves_allowed",
+                "is_lwp"
+            ]
         )
         return api_success("Leave types fetched", leave_types)
     except Exception as e:
+        
         return api_error(str(e))
-
 
 
 
 # -----------------------------------------------------------
 # 1. Get Leave Balance
 # -----------------------------------------------------------
+    
+# @frappe.whitelist(methods=["GET"])
+# def get_leave_balance(employee=None):
+#     if not employee:
+#         return api_error("Employee is required")
+
+#     try:
+#         leave_types = frappe.get_all("Leave Type", fields=["name"])
+
+#         result = []
+
+#         for lt in leave_types:
+#             # Get total allocated
+#             allocation = frappe.get_all(
+#                 "Leave Allocation",
+#                 filters={
+#                     "employee": employee,
+#                     "leave_type": lt.name,
+#                     "docstatus": 1
+#                 },
+#                 fields=["total_leaves_allocated"],
+#                 limit=1
+#             )
+
+#             total_allocated = allocation[0].total_leaves_allocated if allocation else 0
+
+#             # Get remaining balance using ERPNext method
+#             balance = frappe.call(
+#                "hrms.hr.doctype.leave_application.leave_application.get_leave_balance_on",
+#                 employee,
+#                 lt.name,
+#                 nowdate()
+#             )
+
+#             result.append({
+#                 "leave_type": lt.name,
+#                 "total_leaves_allocated": float(total_allocated),
+#                 "balance": float(balance)
+#             })
+
+#         return api_success("Leave Balance fetched successfully.", result)
+
+#     except Exception as e:
+#         return api_error(str(e))
+
+
+# used api
+# @frappe.whitelist(methods=["GET"])
+# def get_leave_balance(employee=None):
+#     if not employee:
+#         return api_error("Employee is required")
+
+#     try:
+#         leave_types = frappe.get_all("Leave Type", fields=["name"])
+#         result = []
+
+#         for lt in leave_types:
+#             # Get total allocated
+#             allocation = frappe.get_all(
+#                 "Leave Allocation",
+#                 filters={
+#                     "employee": employee,
+#                     "leave_type": lt.name,
+#                     "docstatus": 1
+#                 },
+#                 fields=["total_leaves_allocated"],
+#                 limit=1
+#             )
+
+#             total_allocated = allocation[0].total_leaves_allocated if allocation else 0
+
+#             # Get balance using ERPNext method (remaining)
+#             balance = frappe.call(
+#                "hrms.hr.doctype.leave_application.leave_application.get_leave_balance_on",
+#                 employee,
+#                 lt.name,
+#                 nowdate()
+#             )
+
+#             # Calculate used leaves
+#             used = float(total_allocated) - float(balance)
+
+#             result.append({
+#                 "leave_type": lt.name,
+#                 "total_leaves_allocated": float(total_allocated),
+#                 "used_leaves": float(used),
+#                 "balance": float(balance)
+#             })
+
+#         return api_success("Leave Balance fetched successfully.", result)
+
+#     except Exception as e:
+#         return api_error(str(e))
+
+
+
+
+
+#----------------------------------------------------------------------------------
+# --------------------Get Leave Balance And Total Allocated------------------------
+# ---------------------------------------------------------------------------------
+
+
+
 @frappe.whitelist(methods=["GET"])
-def get_leave_balance(employee=None, leave_type=None, date=None):
-
-    if not employee or not leave_type:
-        return api_error("Employee and Leave Type are required")
-
-    date = date or nowdate()
-
-    try:
-        # Returns float (remaining leaves)
-        remaining = frappe.call(
-            "hrms.hr.doctype.leave_application.leave_application.get_leave_balance_on",
-            employee,
-            leave_type,
-            date
-        )
-
-        # Fetch leave allocations (total allocated)
-        allocation = frappe.get_all(
-            "Leave Allocation",
-            filters={
-                "employee": employee,
-                "leave_type": leave_type,
-                "from_date": ["<=", date],
-                "to_date": [">=", date],
-            },
-            fields=["total_leaves_allocated"]
-        )
-
-        total_allocated = allocation[0].total_leaves_allocated if allocation else 0
-
-        # Calculate leaves taken from approved leave applications
-        leaves_taken = frappe.db.sql("""
-            SELECT SUM(total_leave_days) 
-            FROM `tabLeave Application`
-            WHERE employee=%s 
-            AND leave_type=%s 
-            AND docstatus=1
-        """, (employee, leave_type))
-
-        taken = leaves_taken[0][0] or 0
-
-        return api_success(
-            "Leave balance fetched successfully",
-            {
-                "employee": employee,
-                "leave_type": leave_type,
-                "total_allocated": total_allocated,
-                "taken": taken,
-                "remaining": remaining
-            }
-        )
-
-    except Exception as e:
-        return api_error(str(e))
-    
-    
-    
-    
-@frappe.whitelist(methods=["GET"])
-def get_leave_allocations(employee=None):
+def get_leave_balance(employee=None):
     if not employee:
         return api_error("Employee is required")
 
     try:
-        allocations = frappe.get_all(
-            "Leave Allocation",
-            filters={"employee": employee, "docstatus": 1},
-            fields=[
-                "name", "leave_type", "from_date", "to_date",
-                "total_leaves_allocated", "total_leaves_consumed"
-            ]
-        )
-        return api_success("Leave allocations fetched", allocations)
+        leave_types = frappe.get_all("Leave Type", fields=["name"])
+        result = []
+
+        for lt in leave_types:
+
+            # 1️⃣ Get allocated leaves
+            allocation = frappe.get_all(
+                "Leave Allocation",
+                filters={
+                    "employee": employee,
+                    "leave_type": lt.name,
+                    "docstatus": 1
+                },
+                fields=["total_leaves_allocated"],
+                limit=1
+            )
+
+            total_allocated = float(allocation[0].total_leaves_allocated) if allocation else 0.0
+
+            # 2️⃣ Get APPROVED used leaves (ERPNext Default Ledger)
+            approved_leaves = frappe.db.sql(
+                """
+                SELECT ABS(SUM(leaves))
+                FROM `tabLeave Ledger Entry`
+                WHERE employee = %s
+                AND leave_type = %s
+                AND transaction_type = 'Leave Application'
+                AND is_expired = 0
+                AND docstatus = 1
+                """,
+                (employee, lt.name),
+            )[0][0]
+
+            approved_used = float(approved_leaves) if approved_leaves else 0.0
+
+            # 3️⃣ Calculate final balance
+            balance = total_allocated - approved_used
+
+            # 4️⃣ Append result EXACTLY in your required format
+            result.append({
+                "leave_type": lt.name,
+                "total_leaves_allocated": total_allocated,
+                "approved_used": approved_used,
+                "balance": balance
+            })
+
+        return api_success("Leave Balance updated successfully.", result)
 
     except Exception as e:
         return api_error(str(e))
 
+
+
+
+
+# -------------------------------------------------------------------------------------
+# ---------------------------- Leave Creation------------------------------------------
+# -------------------------------------------------------------------------------------
+
+
+
+    
+@frappe.whitelist(allow_guest=False, methods=["POST"])
+def Create_leave():
+    data = frappe.local.form_dict
+
+    try:
+        employee = str(data.get("employee"))
+        leave_type = str(data.get("leave_type"))
+        from_date = str(data.get("from_date"))
+        to_date = str(data.get("to_date"))
+        half_day = int(data.get("half_day") or 0)
+        half_day_date = data.get("half_day_date") or None
+        description = str(data.get("description") or "")
+
+        # Required field check
+        if not employee or not leave_type or not from_date or not to_date:
+            frappe.throw("Missing required fields")
+
+        leave_doc = frappe.get_doc({
+            "doctype": "Leave Application",
+            "employee": employee,
+            "leave_type": leave_type,
+            "from_date": from_date,
+            "to_date": to_date,
+            "half_day": half_day,
+            "half_day_date": half_day_date,
+            "description": description,
+            "ignore_leave_allocation": 1
+        })
+
+        # IGNORE PERMISSIONS (safe)
+        leave_doc.flags.ignore_permissions = True
+        leave_doc.flags.ignore_validate = True
+        leave_doc.flags.ignore_mandatory = True
+        leave_doc.flags.ignore_links = True
+
+        leave_doc.insert()
+        leave_doc.save()
+
+        return {
+            "status": "success",
+            "message": "Leave Created Successfully",
+            "leave_application": leave_doc.name
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Leave API Error")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
     
     
-    
-    
-    
-    
-    
-@frappe.whitelist(methods=["POST"])
+
+@frappe.whitelist(allow_guest=False, methods=["POST"])
 def apply_leave():
     data = frappe.local.form_dict
 
-    required = ["employee", "leave_type", "from_date", "to_date", "half_day"]
-    for r in required:
-        if r not in data:
-            return api_error(f"{r} is required")
-
     try:
-        doc = frappe.get_doc({
-            "doctype": "Leave Application",
-            "employee": data.employee,
-            "leave_type": data.leave_type,
-            "from_date": data.from_date,
-            "to_date": data.to_date,
-            "half_day": data.half_day,
-            "half_day_date": data.get("half_day_date"),
-            "description": data.get("description")
-        })
+        employee = str(data.get("employee"))
+        leave_type = str(data.get("leave_type"))
+        from_date = frappe.utils.getdate(data.get("from_date"))
+        to_date = frappe.utils.getdate(data.get("to_date"))
+        half_day = int(data.get("half_day") or 0)
+        half_day_date = data.get("half_day_date") or None
+        description = str(data.get("description") or "")
 
-        doc.insert()
-        return api_success("Leave Applied Successfully", {"name": doc.name})
+        # Required fields check
+        if not employee or not leave_type or not from_date or not to_date:
+            frappe.throw("Missing required fields")
 
-    except Exception as e:
-        return api_error(str(e))
+        # ============================================================
+        # 1️⃣ STRICT VALIDATION: EMPLOYEE MUST HAVE POLICY ASSIGNED
+        # ============================================================
 
-    
-    
-    
-    
-    
-@frappe.whitelist(methods=["POST"])
-def submit_leave(name=None):
-    if not name:
-        return api_error("Leave Application Name is required")
-
-    try:
-        doc = frappe.get_doc("Leave Application", name)
-        doc.submit()
-        return api_success("Leave Approved Successfully", {"name": doc.name})
-
-    except Exception as e:
-        return api_error(str(e))
-
-    
-    
-    
-
-# -----------------------------------------------------------
-# 2. Apply Leave
-# -----------------------------------------------------------
-@frappe.whitelist(methods=["POST"])
-def apply_leave():
-
-    data = frappe.form_dict
-
-    required = ["employee", "leave_type", "from_date", "to_date"]
-    for r in required:
-        if r not in data:
-            return api_error(f"{r} is required")
-
-    try:
-        doc = frappe.get_doc({
-            "doctype": "Leave Application",
-            "employee": data.employee,
-            "leave_type": data.leave_type,
-            "from_date": data.from_date,
-            "to_date": data.to_date,
-            "half_day": data.get("half_day") or 0,
-            "reason": data.get("reason") or "",
-            "status": "Open"
-        })
-
-        doc.insert(ignore_permissions=True)
-        doc.submit()
-
-        return api_success(
-            "Leave applied successfully",
-            {"leave_application": doc.name, "status": doc.status}
+        policy = frappe.db.get_value(
+            "Leave Policy Assignment",
+            filters={
+                "employee": employee,
+                "docstatus": 1
+            },
+            fieldname=["effective_from", "effective_to"],
+            as_dict=True
         )
 
+        if not policy:
+            frappe.throw("No Leave Policy Assigned to this employee. Leave cannot be created.")
+
+        # Check leave is within policy date range
+        if from_date < policy.effective_from:
+            frappe.throw(
+                f"Leave cannot be applied before Leave Policy Effective From: {policy.effective_from}"
+            )
+
+        if policy.effective_to and to_date > policy.effective_to:
+            frappe.throw(
+                f"Leave cannot be applied after Leave Policy Effective To: {policy.effective_to}"
+            )
+
+        # ============================================================
+        # 2️⃣ VALIDATION: LEAVE ALLOCATION DATE CHECK
+        # ============================================================
+
+        allocation = frappe.db.get_value(
+            "Leave Allocation",
+            filters={
+                "employee": employee,
+                "leave_type": leave_type,
+                "docstatus": 1
+            },
+            fieldname=["from_date", "to_date"],
+            as_dict=True
+        )
+
+        if not allocation:
+            frappe.throw(f"No Leave Allocation found for leave type: {leave_type}")
+
+        # Check leave dates within allocation period
+        if from_date < allocation.from_date:
+            frappe.throw(
+                f"Leave cannot be applied before allocation start date: {allocation.from_date}"
+            )
+
+        if to_date > allocation.to_date:
+            frappe.throw(
+                f"Leave cannot be applied after allocation end date: {allocation.to_date}"
+            )
+
+        # ============================================================
+        # Create Leave Application
+        # ============================================================
+
+        leave_doc = frappe.get_doc({
+            "doctype": "Leave Application",
+            "employee": employee,
+            "leave_type": leave_type,
+            "from_date": from_date,
+            "to_date": to_date,
+            "half_day": half_day,
+            "half_day_date": half_day_date,
+            "description": description
+        })
+
+        leave_doc.flags.ignore_permissions = True  # allow API user
+        leave_doc.insert()                         # ERPNext validations run here too
+
+        return {
+            "status": "success",
+            "message": "Leave Created Successfully",
+            "leave_application": leave_doc.name
+        }
+
     except Exception as e:
-        return api_error(str(e))
+        frappe.log_error(frappe.get_traceback(), "Leave API Error")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
+    
 
-
-# -----------------------------------------------------------
-# 3. Update Leave Status (Approve / Reject)
-# -----------------------------------------------------------
-@frappe.whitelist(methods=["POST"])
-def update_status():
-
-    data = frappe.form_dict
-    name = data.get("name")
-    action = data.get("action")
-
-    if not name or not action:
-        return api_error("Leave name and action are required")
-
-    try:
-        doc = frappe.get_doc("Leave Application", name)
-
-        if action == "Approve":
-            doc.status = "Approved"
-            doc.submit()
-
-        elif action == "Reject":
-            doc.status = "Rejected"
-            doc.submit()
-
-        else:
-            return api_error("Invalid action")
-
-        return api_success("Leave " + action.lower(), {"name": name, "status": doc.status})
-
-    except Exception as e:
-        return api_error(str(e))
-
+    
+    
+    
 
 
 # -----------------------------------------------------------
@@ -281,17 +418,33 @@ def get_leave_list():
 # -----------------------------------------------------------
 # 5. Cancel Leave
 # -----------------------------------------------------------
-@frappe.whitelist(methods=["POST"])
-def cancel_leave():
 
+
+import frappe
+
+@frappe.whitelist(allow_guest=False)
+def cancel_leave():
     name = frappe.form_dict.get("name")
     if not name:
-        return api_error("Leave Application name required")
+        return {"status": "error", "message": "Leave Application name required"}
 
     try:
         doc = frappe.get_doc("Leave Application", name)
+
+        user = frappe.session.user
+        employee_from_user = frappe.db.get_value("Employee", {"user_id": user}, "name")
+
+        if not employee_from_user:
+            return {"status": "error", "message": "You are not linked with any Employee record"}
+
+        if employee_from_user != doc.employee:
+            return {"status": "error", "message": "You are not allowed to cancel this leave"}
+
+        if doc.docstatus != 1:
+            return {"status": "error", "message": "Only submitted leaves can be cancelled"}
+
         doc.cancel()
-        return api_success("Leave cancelled", {"name": name, "status": "Cancelled"})
+        return {"status": "success", "message": "Leave cancelled successfully", "data": {"name": name, "status": "Cancelled"}}
 
     except Exception as e:
-        return api_error(str(e))
+        return {"status": "error", "message": str(e)}
