@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 import json
+from datetime import date
+import calendar
 
 def api_error(error, message):
     return {
@@ -345,88 +347,179 @@ def create_attendance():
 #         }
 
 
-@frappe.whitelist(allow_guest=True, methods=["GET"])
+# @frappe.whitelist(allow_guest=True, methods=["GET"])
+# def get_attendance_list():
+#     try:
+#         data = frappe.form_dict
+
+#         page = int(data.get("page", 1))
+#         page_size = int(data.get("page_size", 10))
+#         employee = data.get("employee")
+
+#         filters = {}
+#         if employee:
+#             filters["employee"] = employee
+
+#         # Count total records
+#         total_records = frappe.db.count("Attendance", filters=filters)
+#         total_pages = (total_records + page_size - 1) // page_size
+#         start = (page - 1) * page_size
+
+#         # Fetch records
+#         records = frappe.get_all(
+#             "Attendance",
+#             filters=filters,
+#             fields=[
+#                 "name", "employee", "employee_name", "attendance_date",
+#                 "status", "in_time", "out_time", "shift", "company"
+#             ],
+#             limit=page_size,
+#             start=start,
+#             order_by="attendance_date desc"
+#         )
+
+#         # Base API URL
+#         base_url = frappe.utils.get_url(
+#             "/api/method/reva_hrms_api.api.attendance_api.get_attendance_list"
+#         )
+
+#         # Build base query params
+#         base_params = f"page_size={page_size}"
+#         if employee:
+#             base_params += f"&employee={employee}"
+
+#         # Build next page URL
+#         next_page_url = (
+#             f"{base_url}?page={page + 1}&{base_params}"
+#             if page < total_pages else None
+#         )
+
+#         # Build previous page URL
+#         prev_page_url = (
+#             f"{base_url}?page={page - 1}&{base_params}"
+#             if page > 1 else None
+#         )
+
+#         return {
+#             "message": {
+#                 "statusCode": 200,
+#                 "message": "Attendance list fetched successfully",
+#                 "data": {
+#                     "page": page,
+#                     "page_size": page_size,
+#                     "total_records": total_records,
+#                     "total_pages": total_pages,
+#                     "next_page": next_page_url,
+#                     "prev_page": prev_page_url,
+#                     "records": records
+#                 }
+#             }
+#         }
+
+#     except Exception as e:
+#         frappe.log_error(frappe.get_traceback(), "Attendance List API Error")
+#         return {
+#             "message": {
+#                 "errors": [
+#                     {
+#                         "error": "Attendance list fetch failed",
+#                         "message": str(e)
+#                     }
+#                 ]
+#             }
+#         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@frappe.whitelist(allow_guest=False, methods=["GET"])
 def get_attendance_list():
     try:
         data = frappe.form_dict
 
         page = int(data.get("page", 1))
         page_size = int(data.get("page_size", 10))
-        employee = data.get("employee")
 
-        filters = {}
-        if employee:
-            filters["employee"] = employee
+        month = data.get("month")
+        year = data.get("year")
 
-        # Count total records
+        # 🔐 Logged-in employee
+        employee = frappe.db.get_value(
+            "Employee",
+            {"user_id": frappe.session.user},
+            "name"
+        )
+
+        if not employee:
+            frappe.throw("Employee is not linked to this user")
+
+        filters = {
+            "employee": employee,
+            "docstatus": 1
+        }
+
+        # 📅 Month & Year filter
+        if month and year:
+            month = int(month)
+            year = int(year)
+
+            last_day = calendar.monthrange(year, month)[1]
+            filters["attendance_date"] = [
+                "between",
+                [
+                    f"{year}-{month:02d}-01",
+                    f"{year}-{month:02d}-{last_day}"
+                ]
+            ]
+
+        # 📊 Count
         total_records = frappe.db.count("Attendance", filters=filters)
         total_pages = (total_records + page_size - 1) // page_size
         start = (page - 1) * page_size
 
-        # Fetch records
         records = frappe.get_all(
             "Attendance",
             filters=filters,
             fields=[
-                "name", "employee", "employee_name", "attendance_date",
-                "status", "in_time", "out_time", "shift", "company"
+                "name",
+                "attendance_date",
+                "status",
+                "in_time",
+                "out_time",
+                "shift",
+                "company"
             ],
             limit=page_size,
             start=start,
             order_by="attendance_date desc"
         )
 
-        # Base API URL
-        base_url = frappe.utils.get_url(
-            "/api/method/reva_hrms_api.api.attendance_api.get_attendance_list"
-        )
-
-        # Build base query params
-        base_params = f"page_size={page_size}"
-        if employee:
-            base_params += f"&employee={employee}"
-
-        # Build next page URL
-        next_page_url = (
-            f"{base_url}?page={page + 1}&{base_params}"
-            if page < total_pages else None
-        )
-
-        # Build previous page URL
-        prev_page_url = (
-            f"{base_url}?page={page - 1}&{base_params}"
-            if page > 1 else None
-        )
-
         return {
-            "message": {
-                "statusCode": 200,
-                "message": "Attendance list fetched successfully",
-                "data": {
-                    "page": page,
-                    "page_size": page_size,
-                    "total_records": total_records,
-                    "total_pages": total_pages,
-                    "next_page": next_page_url,
-                    "prev_page": prev_page_url,
-                    "records": records
-                }
+            "statusCode": 200,
+            "message": "Attendance fetched successfully",
+            "data": {
+                "employee": employee,
+                "page": page,
+                "page_size": page_size,
+                "total_records": total_records,
+                "total_pages": total_pages,
+                "records": records
             }
         }
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Attendance List API Error")
-        return {
-            "message": {
-                "errors": [
-                    {
-                        "error": "Attendance list fetch failed",
-                        "message": str(e)
-                    }
-                ]
-            }
-        }
-
+        frappe.log_error(frappe.get_traceback(), "Employee Attendance API Error")
+        frappe.throw(str(e))
 
 
 
