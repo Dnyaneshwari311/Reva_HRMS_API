@@ -22,71 +22,77 @@ def api_success(message, data={}):
     }
 
 
-# @frappe.whitelist(allow_guest=True)
+
+# @frappe.whitelist(allow_guest=False)    # Only logged-in user can access
 # def create_attendance():
-#     """
-#     Create an Attendance record.
 
-#     Expected JSON body (POST or form-data):
-#     {
-#         "employee": "EMP/001",
-#         "attendance_date": "2025-12-03",
-#         "status": "Present",
-#         "in_time": "09:00",
-#         "out_time": "18:00",
-#         "shift": "Morning",
-#         "company": "My Company"
-#     }
-
-#     Returns:
-#     {
-#         "statusCode": 200,
-#         "message": "Attendance created successfully",
-#         "data": {
-#             "attendance_id": "ATT/0001",
-#             "shift": "Morning"
-#         }
-#     }
-#     """
 #     try:
+#         # -----------------------------
+#         # 1. Logged-in employee check
+#         # -----------------------------
+#         logged_in_user = frappe.session.user
+
+#         if logged_in_user == "Guest":
+#             return api_error("Unauthorized", "You must be logged in to mark attendance.")
+
+#         # Get Employee linked to this user
+#         employee = frappe.db.get_value("Employee", {"user_id": logged_in_user})
+#         if not employee:
+#             return api_error("No Employee Found",
+#                              "Your user account is not linked to an Employee record.")
+
 #         data = frappe.local.form_dict
 
-#         # Validate shift
+#         # -----------------------------
+#         # 2. Prevent creating attendance for others
+#         # -----------------------------
+#         if "employee" in data and data.get("employee") and data.get("employee") != employee:
+#             return api_error("Permission Denied",
+#                              "You cannot mark attendance for another employee.")
+
+#         # -----------------------------
+#         # 3. Shift validation
+#         # -----------------------------
 #         shift = data.get("shift")
 #         if shift and not frappe.db.exists("Shift Type", shift):
-#             return api_error(
-#                 "Invalid Shift",
-#                 f"Shift '{shift}' does not exist"
-#             )
+#             return api_error("Invalid Shift", f"Shift '{shift}' does not exist")
 
+#         # -----------------------------
+#         # 4. Optional: Prevent duplicate attendance
+#         # -----------------------------
+#         if frappe.db.exists("Attendance",
+#                             {"employee": employee, "attendance_date": data.get("attendance_date")}):
+#             return api_error("Already Marked",
+#                              "You have already marked attendance today.")
+
+#         # -----------------------------
+#         # 5. Create Attendance
+#         # -----------------------------
 #         attendance = frappe.get_doc({
 #             "doctype": "Attendance",
-#             "employee": data.get("employee"),
+#             "employee": employee,                      # FORCE logged-in employee
 #             "attendance_date": data.get("attendance_date"),
 #             "status": data.get("status"),
 #             "in_time": data.get("in_time"),
 #             "out_time": data.get("out_time"),
-#             "shift": data.get("shift"),                      # << Added shift field
+#             "shift": shift,
 #             "company": data.get("company")
 #         })
-#         attendance.insert(ignore_permissions=True) 
-#         # attendance.insert()
+#         attendance.insert(ignore_permissions=True)
 
-#         return api_success(
-#             "Attendance created successfully",
-#             {
-#                 "attendance_id": attendance.name,
-#                 "shift": shift
-#             }
-#         )
+#         return api_success("Attendance created successfully",
+#                            {"attendance_id": attendance.name, "shift": shift})
 
 #     except Exception as e:
 #         return api_error("Attendance Creation Failed", str(e))
 
 
-@frappe.whitelist(allow_guest=False)    # Only logged-in user can access
-def create_attendance():
 
+
+from frappe.utils import getdate, today
+
+@frappe.whitelist(allow_guest=False)
+def create_attendance():
     try:
         # -----------------------------
         # 1. Logged-in employee check
@@ -96,56 +102,84 @@ def create_attendance():
         if logged_in_user == "Guest":
             return api_error("Unauthorized", "You must be logged in to mark attendance.")
 
-        # Get Employee linked to this user
         employee = frappe.db.get_value("Employee", {"user_id": logged_in_user})
         if not employee:
-            return api_error("No Employee Found",
-                             "Your user account is not linked to an Employee record.")
+            return api_error(
+                "No Employee Found",
+                "Your user account is not linked to an Employee record."
+            )
 
         data = frappe.local.form_dict
 
         # -----------------------------
-        # 2. Prevent creating attendance for others
+        # 2. Prevent marking for others
         # -----------------------------
-        if "employee" in data and data.get("employee") and data.get("employee") != employee:
-            return api_error("Permission Denied",
-                             "You cannot mark attendance for another employee.")
+        if data.get("employee") and data.get("employee") != employee:
+            return api_error(
+                "Permission Denied",
+                "You cannot mark attendance for another employee."
+            )
 
         # -----------------------------
-        # 3. Shift validation
+        # 3. Attendance Date validation
+        # -----------------------------
+        attendance_date = data.get("attendance_date")
+        if not attendance_date:
+            return api_error("Missing Date", "attendance_date is required.")
+
+        if getdate(attendance_date) > getdate(today()):
+            return api_error(
+                "Invalid Attendance Date",
+                "You cannot mark attendance for a future date."
+            )
+
+        # -----------------------------
+        # 4. Shift validation
         # -----------------------------
         shift = data.get("shift")
         if shift and not frappe.db.exists("Shift Type", shift):
             return api_error("Invalid Shift", f"Shift '{shift}' does not exist")
 
         # -----------------------------
-        # 4. Optional: Prevent duplicate attendance
+        # 5. Prevent duplicate attendance
         # -----------------------------
-        if frappe.db.exists("Attendance",
-                            {"employee": employee, "attendance_date": data.get("attendance_date")}):
-            return api_error("Already Marked",
-                             "You have already marked attendance today.")
+        if frappe.db.exists(
+            "Attendance",
+            {"employee": employee, "attendance_date": attendance_date}
+        ):
+            return api_error(
+                "Already Marked",
+                "You have already marked attendance for this date."
+            )
 
         # -----------------------------
-        # 5. Create Attendance
+        # 6. Create Attendance
         # -----------------------------
         attendance = frappe.get_doc({
             "doctype": "Attendance",
-            "employee": employee,                      # FORCE logged-in employee
-            "attendance_date": data.get("attendance_date"),
+            "employee": employee,
+            "attendance_date": attendance_date,
             "status": data.get("status"),
             "in_time": data.get("in_time"),
             "out_time": data.get("out_time"),
             "shift": shift,
             "company": data.get("company")
         })
+
         attendance.insert(ignore_permissions=True)
 
-        return api_success("Attendance created successfully",
-                           {"attendance_id": attendance.name, "shift": shift})
+        return api_success(
+            "Attendance created successfully",
+            {
+                "attendance_id": attendance.name,
+                "attendance_date": attendance_date
+            }
+        )
 
     except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Create Attendance API Error")
         return api_error("Attendance Creation Failed", str(e))
+
 
 
 
