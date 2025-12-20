@@ -397,6 +397,8 @@ def apply_leave():
 # -----------------------------------------------------------
 # 4. Leave List API
 # -----------------------------------------------------------
+from frappe.utils import date_diff
+
 @frappe.whitelist(methods=["GET"])
 def get_leave_list():
 
@@ -415,35 +417,82 @@ def get_leave_list():
     records = frappe.get_all(
         "Leave Application",
         filters=filters,
-        fields=["name", "employee", "leave_type", "from_date", "to_date", "status"],
+        fields=[
+            "name",
+            "employee",
+            "leave_type",
+            "from_date",
+            "to_date",
+            "half_day",
+            "status",
+            "leave_approver"
+        ],
         limit=page_size,
         start=offset,
         order_by="from_date desc"
     )
 
+    # =========================
+    # Enrich Records
+    # =========================
+    for r in records:
+        # Applied days (double)
+        days = date_diff(r.to_date, r.from_date) + 1
+        if r.half_day:
+            days -= 0.5
+        r["applied_days"] = float(days)
+
+        # Approved by name
+        if r.leave_approver:
+            r["approved_by_name"] = frappe.db.get_value(
+                "User", r.leave_approver, "full_name"
+            )
+        else:
+            r["approved_by_name"] = ""
+
+        # Remove internal fields
+        r.pop("half_day", None)
+        r.pop("leave_approver", None)
+
     total = frappe.db.count("Leave Application", filters)
+
+    # =========================
+    # Pagination URLs
+    # =========================
+    base_url = "/api/method/reva_hrms_api.api.leave.get_leave_list"
+
+    query_params = []
+    if employee:
+        query_params.append(f"employee={employee}")
+    if status:
+        query_params.append(f"status={status}")
+    query_params.append(f"page_size={page_size}")
+
+    query_string = "&".join(query_params)
 
     next_page = None
     prev_page = None
 
     if offset + page_size < total:
-        next_page = f"/api/method/reva_hrms_api.api.leave.get_leave_list?page={page+1}&page_size={page_size}"
+        next_page = f"{base_url}?page={page+1}&{query_string}"
 
     if page > 1:
-        prev_page = f"/api/method/reva_hrms_api.api.leave.get_leave_list?page={page-1}&page_size={page_size}"
+        prev_page = f"{base_url}?page={page-1}&{query_string}"
 
+    # =========================
+    # Response
+    # =========================
     return api_success(
         "Leave list fetched",
         {
             "page": page,
             "page_size": page_size,
-            "total": total,
+            "total": float(total),
             "next_page": next_page,
             "prev_page": prev_page,
             "records": records
         }
     )
-
 
 
 # -----------------------------------------------------------
@@ -521,3 +570,136 @@ def get_holiday_list():
 
     except Exception as e:
         return api_error(str(e))
+
+
+
+
+
+
+
+
+
+
+
+
+
+from frappe.utils import date_diff, nowdate
+from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
+
+@frappe.whitelist(allow_guest=False, methods=["GET"])
+def get_leave_summary():
+    try:
+        user = frappe.session.user
+
+        if user == "Guest":
+            return {"status": "error", "message": "Unauthorized"}
+
+        # 🔹 Employee linked to user
+        employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
+        if not employee:
+            return {"status": "error", "message": "No employee linked"}
+
+        # 🔹 Helper to calculate leave days (double)
+        def calc_days(leaves):
+            total = 0.0
+            for l in leaves:
+                days = date_diff(l.to_date, l.from_date) + 1
+                if l.half_day:
+                    days -= 0.5
+                total += days
+            return float(total)
+
+        # ======================
+        # Leave Applications
+        # ======================
+
+        approved = frappe.get_all(
+            "Leave Application",
+            filters={"employee": employee, "status": "Approved", "docstatus": 1},
+            fields=["from_date", "to_date", "half_day"]
+        )
+
+        pending = frappe.get_all(
+            "Leave Application",
+            filters={"employee": employee, "status": "Open", "docstatus": 0},
+            fields=["from_date", "to_date", "half_day"]
+        )
+
+        cancelled = frappe.get_all(
+            "Leave Application",
+            filters={"employee": employee, "status": "Cancelled", "docstatus": 2},
+            fields=["from_date", "to_date", "half_day"]
+        )
+
+        approved_days = calc_days(approved)
+        pending_days = calc_days(pending)
+        cancelled_days = calc_days(cancelled)
+
+        # ======================
+        # Leave Allocation
+        # ======================
+
+        allocations = frappe.get_all(
+            "Leave Allocation",
+            filters={"employee": employee, "docstatus": 1},
+            fields=["leave_type", "total_leaves_allocated"]
+        )
+
+        total_allocated = 0.0
+        total_balance = 0.0
+        leave_type_wise = []
+
+        for a in allocations:
+            allocated = float(a.total_leaves_allocated or 0)
+
+            remaining = float(
+                get_leave_balance_on(
+                    employee=employee,
+                    leave_type=a.leave_type,
+                    date=nowdate()
+                ) or 0
+            )
+
+            total_allocated += allocated
+            total_balance += remaining
+
+            leave_type_wise.append({
+                "leave_type": a.leave_type,
+                "allocated": allocated,
+                "balance": remaining
+            })
+
+        # ======================
+        # Final Response
+        # ======================
+
+        return {
+            "status": "success",
+            "employee": employee,
+
+            # Totals
+            "total_leaves": float(total_allocated),
+            "balance_leaves": float(total_balance),
+
+            # Days
+            "approved_leaves": float(approved_days),
+            "pending_leaves": float(pending_days),
+            "cancelled_leaves": float(cancelled_days),
+
+            # ✅ Newly added keys
+            "approved_leaves_days": float(approved_days),
+            "pending_leaves_days": float(pending_days),
+
+            # Counts (also double)
+            "details": {
+                "approved_count": float(len(approved)),
+                "pending_count": float(len(pending)),
+                "cancelled_count": float(len(cancelled))
+            },
+
+            "leave_type_wise": leave_type_wise
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Leave Summary API Error")
+        return {"status": "error", "message": str(e)}
