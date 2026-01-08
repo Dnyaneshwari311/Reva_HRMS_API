@@ -32,7 +32,7 @@ Response:
 def send_forgot_password_otp(email):
     user = frappe.db.get_value("User", {"email": email}, "name")
     if not user:
-        return api_error("User with this email does not exist.", "UserNotFound")
+        return api_error("User With This Email Does Not Exist.", "UserNotFound")
 
     otp = ''.join(random.choices(string.digits, k=6))
     expiry_time = add_to_date(now_datetime(), minutes=10)
@@ -46,15 +46,15 @@ def send_forgot_password_otp(email):
         frappe.sendmail(
             recipients=[email],
             subject="Password Reset OTP",
-            message=f"Your OTP is {otp}. It expires in 10 minutes."
+            message=f"Your OTP is {otp}. It Expires In 10 Minutes."
         )
     except Exception as e:
         frappe.log_error(str(e), "OTP Email Error")
-        return api_error("Failed to send OTP email.", "EmailSendError")
+        return api_error("Failed To Send OTP Email.", "EmailSendError")
 
     return {
         "statusCode": 201,
-        "message": "OTP sent successfully.",
+        "message": "OTP Sent Successfully.",
         "data": {
             "email": email,
             "otp_expiry": str(expiry_time)
@@ -88,7 +88,7 @@ Response:
 @frappe.whitelist(allow_guest=True, methods=["POST"])
 def verify_forgot_password_otp(email, otp):
     if not email or not otp:
-        return api_error("Email and OTP are required.", "MissingFields")
+        return api_error("Email And OTP Are Required.", "MissingFields")
 
     stored_otp, expiry_time = frappe.db.get_value(
         "User",
@@ -107,7 +107,7 @@ def verify_forgot_password_otp(email, otp):
 
     return {
         "statusCode": 200,
-        "message": "OTP verified successfully.",
+        "message": "OTP Verified Successfully.",
         "data": {
             "email": email
         }
@@ -145,7 +145,7 @@ def reset_password_with_otp(email, otp, new_password, confirm_password):
         return api_error("All fields are required.", "MissingFields")
 
     if new_password != confirm_password:
-        return api_error("Passwords do not match.", "PasswordMismatch")
+        return api_error("Passwords Do Not Match.", "PasswordMismatch")
 
     stored_otp, expiry_time = frappe.db.get_value(
         "User",
@@ -154,7 +154,7 @@ def reset_password_with_otp(email, otp, new_password, confirm_password):
     )
 
     if not stored_otp:
-        return api_error("No OTP found. Request a new one.", "OtpNotFound")
+        return api_error("No OTP Found. Request A New One.", "OtpNotFound")
 
     if not expiry_time or now_datetime() > expiry_time:
         return api_error("OTP expired.", "OtpExpired")
@@ -175,7 +175,7 @@ def reset_password_with_otp(email, otp, new_password, confirm_password):
 
     return {
         "statusCode": 200,
-        "message": "Password reset successfully.",
+        "message": "Password Reset Successfully.",
         "data": {
             "email": email
         }

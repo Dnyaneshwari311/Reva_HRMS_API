@@ -18,7 +18,7 @@ def employee_hrms_dashboard(from_date=None, to_date=None, employee_id=None):
         )
 
     if not employee_id:
-        frappe.throw("No Employee linked with this user")
+        frappe.throw("No Employee Linked With This User")
 
     # Default date range = Current month
     if not from_date:
@@ -110,72 +110,6 @@ def employee_hrms_dashboard(from_date=None, to_date=None, employee_id=None):
 
 
 
-
-# @frappe.whitelist(methods=["GET", "POST"])
-# def get_checkin_list():
-#     """
-#     API: Get Checkin List for Logged-in Employee Only
-#     Accepts:
-#       - date (optional, YYYY-MM-DD)
-#       - from_date (optional)
-#       - to_date (optional)
-#       - limit (optional)
-#     Only logged-in employee's check-ins are returned.
-#     """
-
-#     try:
-#         # Get logged-in user
-#         user = frappe.session.user
-#         if user == "Guest":
-#             return {"success": False, "message": "Login required to access this API"}
-
-#         # Get Employee linked with logged-in user
-#         employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
-#         if not employee:
-#             return {"success": False, "message": "No employee linked with this user"}
-
-#         # Get filters from request
-#         data = frappe.form_dict
-#         date = data.get("date")          # single date filter
-#         from_date = data.get("from_date")
-#         to_date = data.get("to_date")
-#         limit = int(data.get("limit") or 200)
-
-#         # Build filters
-#         filters = {"employee": employee}
-
-#         if date:
-#             filters["time"] = ["between", [f"{date} 00:00:00", f"{date} 23:59:59"]]
-
-#         if from_date and to_date:
-#             filters["time"] = ["between", [f"{from_date} 00:00:00", f"{to_date} 23:59:59"]]
-
-#         # Fetch Check-ins
-#         checkins = frappe.get_all(
-#             "Employee Checkin",
-#             filters=filters,
-#             fields=["name", "employee", "log_type", "time", "creation"],
-#             order_by="time desc",
-#             limit_page_length=limit
-#         )
-
-#         return {
-#             "success": True,
-#             "message": f"Checkin List for {employee}",
-#             "count": len(checkins),
-#             "data": checkins
-#         }
-
-#     except Exception as e:
-#         frappe.log_error(frappe.get_traceback(), "Employee Checkin List API Error")
-#         return {"success": False, "message": "Failed to fetch list", "error": str(e)}
-
-
-
-
-
-
-
 @frappe.whitelist(methods=["GET", "POST"])
 def get_checkin_list():
     """
@@ -192,12 +126,12 @@ def get_checkin_list():
         # Logged-in user
         user = frappe.session.user
         if user == "Guest":
-            return {"success": False, "message": "Login required to access this API"}
+            return {"success": False, "message": "Login Required To Access This API"}
 
         # Employee linked to user
         employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
         if not employee:
-            return {"success": False, "message": "No employee linked with this user"}
+            return {"success": False, "message": "No Employee Linked With This User"}
 
         data = frappe.form_dict
 
@@ -248,7 +182,7 @@ def get_checkin_list():
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Monthly Attendance API Error")
-        return {"success": False, "message": "Failed to fetch monthly attendance", "error": str(e)}
+        return {"success": False, "message": "Failed To Fetch Monthly Attendance", "error": str(e)}
 
 
 

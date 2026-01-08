@@ -250,7 +250,7 @@ def Create_leave():
         if not leave_type or not from_date or not to_date:
             return {
                 "status": "error",
-                "message": "Missing required fields"
+                "message": "Missing Required Fields"
             }
 
         # 7️⃣ Create Leave Application (ONLY for logged-in employee)
@@ -314,7 +314,7 @@ def apply_leave():
         )
 
         if not policy:
-            frappe.throw("No Leave Policy Assigned to this employee. Leave cannot be created.")
+            frappe.throw("No Leave Policy Assigned To This Employee. Leave Cannot Be Created.")
 
         # Check leave is within policy date range
         if from_date < policy.effective_from:
@@ -343,17 +343,17 @@ def apply_leave():
         )
 
         if not allocation:
-            frappe.throw(f"No Leave Allocation found for leave type: {leave_type}")
+            frappe.throw(f"No Leave Allocation Found For Leave Type: {leave_type}")
 
         # Check leave dates within allocation period
         if from_date < allocation.from_date:
             frappe.throw(
-                f"Leave cannot be applied before allocation start date: {allocation.from_date}"
+                f"Leave Cannot Be Applied Before Allocation Start Date: {allocation.from_date}"
             )
 
         if to_date > allocation.to_date:
             frappe.throw(
-                f"Leave cannot be applied after allocation end date: {allocation.to_date}"
+                f"Leave Cannot Be Applied After Allocation End Date: {allocation.to_date}"
             )
 
         # ============================================================
@@ -506,7 +506,7 @@ import frappe
 def cancel_leave():
     name = frappe.form_dict.get("name")
     if not name:
-        return {"status": "error", "message": "Leave Application name required"}
+        return {"status": "error", "message": "Leave Application Name Required"}
 
     try:
         doc = frappe.get_doc("Leave Application", name)
@@ -515,16 +515,16 @@ def cancel_leave():
         employee_from_user = frappe.db.get_value("Employee", {"user_id": user}, "name")
 
         if not employee_from_user:
-            return {"status": "error", "message": "You are not linked with any Employee record"}
+            return {"status": "error", "message": "You Are Not Linked With Any Employee Record"}
 
         if employee_from_user != doc.employee:
-            return {"status": "error", "message": "You are not allowed to cancel this leave"}
+            return {"status": "error", "message": "You Are Not Allowed To Cancel This Leave"}
 
         if doc.docstatus != 1:
-            return {"status": "error", "message": "Only submitted leaves can be cancelled"}
+            return {"status": "error", "message": "Only Submitted Leaves Can Be Cancelled"}
 
         doc.cancel()
-        return {"status": "success", "message": "Leave cancelled successfully", "data": {"name": name, "status": "Cancelled"}}
+        return {"status": "success", "message": "Leave Cancelled Successfully", "data": {"name": name, "status": "Cancelled"}}
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -566,7 +566,7 @@ def get_holiday_list():
                     "description": clean_desc   # now plain text
                 })
 
-        return api_success("Holiday list fetched", {"holidays": all_holidays})
+        return api_success("Holiday List fetched", {"holidays": all_holidays})
 
     except Exception as e:
         return api_error(str(e))
