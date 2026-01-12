@@ -33,14 +33,14 @@ def create_user():
         if not email or not first_name or not password:
             return api_error(
                 "Missing Fields",
-                "email, first_name and password are required"
+                "email, first_name and password are Required"
             )
 
         # Check if user already exists
         if frappe.db.exists("User", email):
             return api_error(
                 "User Exists",
-                f"User with email {email} already exists"
+                f"User With Email {email} Already Exists"
             )
 
         # Create new user
@@ -68,7 +68,7 @@ def create_user():
         frappe.db.commit()
 
         return api_success(
-            "User created successfully",
+            "User Created Successfully",
             {
                 "user_id": user.name,
                 "email": email,
@@ -360,7 +360,7 @@ def get_user_with_employee_details():
                 "success": False,
                 "error": {
                     "code": "AUTH_REQUIRED",
-                    "message": "Login required."
+                    "message": "Login Required."
                 }
             }
 

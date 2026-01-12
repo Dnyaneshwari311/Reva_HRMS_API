@@ -198,7 +198,7 @@ def get_dashboard():
     try:
         user = frappe.session.user
         if user == "Guest":
-            return {"message": {"success": False, "message": "Login required"}}
+            return {"message": {"success": False, "message": "Login Required"}}
 
         # Logged-in employee
         logged_employee = frappe.db.get_value(
@@ -206,7 +206,7 @@ def get_dashboard():
         )
 
         if not logged_employee:
-            return {"message": {"success": False, "message": "Employee not linked"}}
+            return {"message": {"success": False, "message": "Employee Not Linked"}}
 
         data = frappe.form_dict
 
@@ -215,7 +215,7 @@ def get_dashboard():
             return {
                 "message": {
                     "success": False,
-                    "message": "You are not allowed to access another employee’s data"
+                    "message": "You Are Not Allowed To Access Another Employee’s Data"
                 }
             }
 
@@ -224,7 +224,7 @@ def get_dashboard():
         import calendar
 
         if not date_filter:
-            return {"message": {"success": False, "message": "Date is required"}}
+            return {"message": {"success": False, "message": "Date Is Required"}}
 
         from_date = f"{date_filter} 00:00:00"
         to_date = f"{date_filter} 23:59:59"

@@ -106,7 +106,7 @@ def create_attendance():
         if not employee:
             return api_error(
                 "No Employee Found",
-                "Your user account is not linked to an Employee record."
+                "Your User Account Is Not Linked To An Employee Record."
             )
 
         data = frappe.local.form_dict
@@ -117,7 +117,7 @@ def create_attendance():
         if data.get("employee") and data.get("employee") != employee:
             return api_error(
                 "Permission Denied",
-                "You cannot mark attendance for another employee."
+                "You Cannot Mark Attendance For Another Employee."
             )
 
         # -----------------------------

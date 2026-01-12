@@ -16,7 +16,7 @@ def get_leave_types():
                 "is_lwp"
             ]
         )
-        return api_success("Leave types fetched", leave_types)
+        return api_success("Leave Types Fetched", leave_types)
     except Exception as e:
         
         return api_error(str(e))
@@ -91,7 +91,7 @@ def get_leave_types():
 @frappe.whitelist(methods=["GET"])
 def get_leave_balance(employee=None):
     if not employee:
-        return api_error("Employee is required")
+        return api_error("Employee Is Required")
 
     try:
         leave_types = frappe.get_all("Leave Type", fields=["name"])
@@ -140,7 +140,7 @@ def get_leave_balance(employee=None):
                 "balance": balance
             })
 
-        return api_success("Leave Balance updated successfully.", result)
+        return api_success("Leave Balance Updated Successfully.", result)
 
     except Exception as e:
         return api_error(str(e))
@@ -225,7 +225,7 @@ def Create_leave():
         if not logged_in_employee:
             return {
                 "status": "error",
-                "message": "Only employees can create leave. No employee linked to this user."
+                "message": "Only Employees Can Create Leave. No Employee Linked To This User."
             }
 
         # 3️⃣ Employee sent in request
@@ -235,7 +235,7 @@ def Create_leave():
         if requested_employee != logged_in_employee:
             return {
                 "status": "error",
-                "message": "You are not allowed to create leave for another employee."
+                "message": "You Are Not Allowed To Create Leave For Another Employee."
             }
 
         # 5️⃣ Other fields
@@ -297,7 +297,7 @@ def apply_leave():
 
         # Required fields check
         if not employee or not leave_type or not from_date or not to_date:
-            frappe.throw("Missing required fields")
+            frappe.throw("Missing Required Fields")
 
         # ============================================================
         # 1️⃣ STRICT VALIDATION: EMPLOYEE MUST HAVE POLICY ASSIGNED
@@ -319,12 +319,12 @@ def apply_leave():
         # Check leave is within policy date range
         if from_date < policy.effective_from:
             frappe.throw(
-                f"Leave cannot be applied before Leave Policy Effective From: {policy.effective_from}"
+                f"Leave Cannot Be Applied Before Leave Policy Effective From: {policy.effective_from}"
             )
 
         if policy.effective_to and to_date > policy.effective_to:
             frappe.throw(
-                f"Leave cannot be applied after Leave Policy Effective To: {policy.effective_to}"
+                f"Leave Cannot Be Applied After Leave Policy Effective To: {policy.effective_to}"
             )
 
         # ============================================================
@@ -597,7 +597,7 @@ def get_leave_summary():
         # 🔹 Employee linked to user
         employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
         if not employee:
-            return {"status": "error", "message": "No employee linked"}
+            return {"status": "error", "message": "No Employee Linked"}
 
         # 🔹 Helper to calculate leave days (double)
         def calc_days(leaves):

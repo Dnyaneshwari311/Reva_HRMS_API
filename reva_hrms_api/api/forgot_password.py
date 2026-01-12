@@ -97,10 +97,10 @@ def verify_forgot_password_otp(email, otp):
     )
 
     if not stored_otp:
-        return api_error("No OTP found. Request a new one.", "OtpNotFound")
+        return api_error("No OTP Found. Request A New One.", "OtpNotFound")
 
     if not expiry_time or now_datetime() > expiry_time:
-        return api_error("OTP expired. Request a new one.", "OtpExpired")
+        return api_error("OTP Expired. Request A New One.", "OtpExpired")
 
     if str(otp).strip() != str(stored_otp).strip():
         return api_error("Invalid OTP.", "OtpMismatch")

@@ -70,12 +70,12 @@ def login_and_get_token():
             "errors": [
                 {
                     "error": "Authentication Error",
-                    "message": _("Invalid login credentials")
+                    "message": _("Invalid login Credentials")
                 }
             ]
         }, 401  # 401 is the HTTP status code for Unauthorized
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Login and Token API Error")
+        frappe.log_error(frappe.get_traceback(), "Login And Token API Error")
         return {
             "errors": [
                 {
@@ -137,7 +137,7 @@ def reset_password():
             "errors": [
                 {
                     "error": "Not Authenticated",
-                    "message": "You must be logged in to change your password"
+                    "message": "You Must Be Logged In To Change Your Password"
                 }
             ]
         }, 403  # 403 is the HTTP status code for Forbidden
@@ -163,7 +163,7 @@ def reset_password():
             "errors": [
                 {
                     "error": "Password Mismatch",
-                    "message": "New password and confirm password do not match"
+                    "message": "New Password And Confirm Password Do Not Match"
                 }
             ]
         }, 400  # 400 for Bad Request
@@ -177,7 +177,7 @@ def reset_password():
 
         return {
             "statusCode": 200,
-            "message": "Password updated successfully",
+            "message": "Password Updated Successfully",
             "data": {}
         }
 
@@ -186,7 +186,7 @@ def reset_password():
             "errors": [
                 {
                     "error": "Authentication Error",
-                    "message": "Previous password is incorrect"
+                    "message": "Previous Password Is Incorrect"
                 }
             ]
         }, 401  # 401 Unauthorized
