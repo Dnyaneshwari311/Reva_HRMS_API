@@ -397,102 +397,223 @@ def apply_leave():
 # -----------------------------------------------------------
 # 4. Leave List API
 # -----------------------------------------------------------
+# from frappe.utils import date_diff
+
+# @frappe.whitelist(methods=["GET"])
+# def get_leave_list():
+
+#     employee = frappe.form_dict.get("employee")
+#     status = frappe.form_dict.get("status")
+#     page = int(frappe.form_dict.get("page", 1))
+#     page_size = int(frappe.form_dict.get("page_size", 10))
+#     offset = (page - 1) * page_size
+
+#     filters = {}
+#     if employee:
+#         filters["employee"] = employee
+#     if status:
+#         filters["status"] = status
+
+#     records = frappe.get_all(
+#         "Leave Application",
+#         filters=filters,
+#         fields=[
+#             "name",
+#             "employee",
+#             "leave_type",
+#             "from_date",
+#             "to_date",
+#             "half_day",
+#             "status",
+#             "leave_approver"
+#         ],
+#         limit=page_size,
+#         start=offset,
+#         order_by="from_date desc"
+#     )
+
+#     # =========================
+#     # Enrich Records
+#     # =========================
+#     for r in records:
+#         # Applied days (double)
+#         days = date_diff(r.to_date, r.from_date) + 1
+#         if r.half_day:
+#             days -= 0.5
+#         r["applied_days"] = float(days)
+
+#         # Approved by name
+#         if r.leave_approver:
+#             r["approved_by_name"] = frappe.db.get_value(
+#                 "User", r.leave_approver, "full_name"
+#             )
+#         else:
+#             r["approved_by_name"] = ""
+
+#         # Remove internal fields
+#         r.pop("half_day", None)
+#         r.pop("leave_approver", None)
+
+#     total = frappe.db.count("Leave Application", filters)
+
+#     # =========================
+#     # Pagination URLs
+#     # =========================
+#     base_url = "/api/method/reva_hrms_api.api.leave.get_leave_list"
+
+#     query_params = []
+#     if employee:
+#         query_params.append(f"employee={employee}")
+#     if status:
+#         query_params.append(f"status={status}")
+#     query_params.append(f"page_size={page_size}")
+
+#     query_string = "&".join(query_params)
+
+#     next_page = None
+#     prev_page = None
+
+#     if offset + page_size < total:
+#         next_page = f"{base_url}?page={page+1}&{query_string}"
+
+#     if page > 1:
+#         prev_page = f"{base_url}?page={page-1}&{query_string}"
+
+#     # =========================
+#     # Response
+#     # =========================
+#     return api_success(
+#         "Leave list fetched",
+#         {
+#             "page": page,
+#             "page_size": page_size,
+#             "total": float(total),
+#             "next_page": next_page,
+#             "prev_page": prev_page,
+#             "records": records
+#         }
+#     )
+
+
+
 from frappe.utils import date_diff
 
-@frappe.whitelist(methods=["GET"])
+@frappe.whitelist(allow_guest=False, methods=["GET"])
 def get_leave_list():
 
-    employee = frappe.form_dict.get("employee")
-    status = frappe.form_dict.get("status")
-    page = int(frappe.form_dict.get("page", 1))
-    page_size = int(frappe.form_dict.get("page_size", 10))
-    offset = (page - 1) * page_size
+    try:
+        # =========================
+        # 🔐 Logged-in User & Employee
+        # =========================
+        user = frappe.session.user
+        if user == "Guest":
+            return api_error("Unauthorized")
 
-    filters = {}
-    if employee:
-        filters["employee"] = employee
-    if status:
-        filters["status"] = status
+        employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
+        if not employee:
+            return api_error("No Employee Linked To This User")
 
-    records = frappe.get_all(
-        "Leave Application",
-        filters=filters,
-        fields=[
-            "name",
-            "employee",
-            "leave_type",
-            "from_date",
-            "to_date",
-            "half_day",
-            "status",
-            "leave_approver"
-        ],
-        limit=page_size,
-        start=offset,
-        order_by="from_date desc"
-    )
+        # =========================
+        # Request Params
+        # =========================
+        status = frappe.form_dict.get("status")
+        page = int(frappe.form_dict.get("page", 1))
+        page_size = int(frappe.form_dict.get("page_size", 10))
+        offset = (page - 1) * page_size
 
-    # =========================
-    # Enrich Records
-    # =========================
-    for r in records:
-        # Applied days (double)
-        days = date_diff(r.to_date, r.from_date) + 1
-        if r.half_day:
-            days -= 0.5
-        r["applied_days"] = float(days)
+        # =========================
+        # 🔒 STRICT FILTER (Only Own Leaves)
+        # =========================
+        filters = {"employee": employee}
 
-        # Approved by name
-        if r.leave_approver:
-            r["approved_by_name"] = frappe.db.get_value(
-                "User", r.leave_approver, "full_name"
-            )
-        else:
-            r["approved_by_name"] = ""
+        if status:
+            filters["status"] = status
 
-        # Remove internal fields
-        r.pop("half_day", None)
-        r.pop("leave_approver", None)
+        # =========================
+        # Fetch Records
+        # =========================
+        records = frappe.get_all(
+            "Leave Application",
+            filters=filters,
+            fields=[
+                "name",
+                "employee",
+                "leave_type",
+                "from_date",
+                "to_date",
+                "half_day",
+                "status",
+                "leave_approver"
+            ],
+            limit=page_size,
+            start=offset,
+            order_by="from_date desc"
+        )
 
-    total = frappe.db.count("Leave Application", filters)
+        # =========================
+        # Enrich Records
+        # =========================
+        for r in records:
+            days = date_diff(r.to_date, r.from_date) + 1
+            if r.half_day:
+                days -= 0.5
 
-    # =========================
-    # Pagination URLs
-    # =========================
-    base_url = "/api/method/reva_hrms_api.api.leave.get_leave_list"
+            r["applied_days"] = float(days)
 
-    query_params = []
-    if employee:
-        query_params.append(f"employee={employee}")
-    if status:
-        query_params.append(f"status={status}")
-    query_params.append(f"page_size={page_size}")
+            if r.leave_approver:
+                r["approved_by_name"] = frappe.db.get_value(
+                    "User", r.leave_approver, "full_name"
+                )
+            else:
+                r["approved_by_name"] = ""
 
-    query_string = "&".join(query_params)
+            r.pop("half_day", None)
+            r.pop("leave_approver", None)
 
-    next_page = None
-    prev_page = None
+        total = frappe.db.count("Leave Application", filters)
 
-    if offset + page_size < total:
-        next_page = f"{base_url}?page={page+1}&{query_string}"
+        # =========================
+        # Pagination URLs
+        # =========================
+        base_url = "/api/method/reva_hrms_api.api.leave.get_leave_list"
+        query_params = [f"page_size={page_size}"]
+        if status:
+            query_params.append(f"status={status}")
 
-    if page > 1:
-        prev_page = f"{base_url}?page={page-1}&{query_string}"
+        query_string = "&".join(query_params)
 
-    # =========================
-    # Response
-    # =========================
-    return api_success(
-        "Leave list fetched",
-        {
-            "page": page,
-            "page_size": page_size,
-            "total": float(total),
-            "next_page": next_page,
-            "prev_page": prev_page,
-            "records": records
-        }
-    )
+        next_page = (
+            f"{base_url}?page={page+1}&{query_string}"
+            if offset + page_size < total else None
+        )
+
+        prev_page = (
+            f"{base_url}?page={page-1}&{query_string}"
+            if page > 1 else None
+        )
+
+        # =========================
+        # Response
+        # =========================
+        return api_success(
+            "Leave list fetched",
+            {
+        
+                "page": page,
+                "page_size": page_size,
+                "total": float(total),
+                "next_page": next_page,
+                "prev_page": prev_page,
+                "records": records
+            }
+        )
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Leave List API Error")
+        return api_error(str(e))
+
+
+
 
 
 # -----------------------------------------------------------
